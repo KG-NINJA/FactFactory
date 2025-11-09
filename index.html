@@ -171,6 +171,106 @@
         text-decoration: underline;
       }
 
+      .belt-card {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      .belt-track {
+        position: relative;
+        height: 72px;
+        border-radius: 14px;
+        overflow: hidden;
+        border: 1px solid rgba(82, 182, 255, 0.4);
+        background: linear-gradient(90deg, rgba(0, 123, 255, 0.2) 0%, rgba(0, 0, 0, 0.4) 50%, rgba(0, 123, 255, 0.2) 100%);
+      }
+
+      .belt-track::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: repeating-linear-gradient(
+          -45deg,
+          rgba(0, 123, 255, 0.12) 0,
+          rgba(0, 123, 255, 0.12) 12px,
+          rgba(0, 0, 0, 0.4) 12px,
+          rgba(0, 0, 0, 0.4) 24px
+        );
+        animation: conveyor 6s linear infinite;
+      }
+
+      @keyframes conveyor {
+        from {
+          transform: translateX(0);
+        }
+        to {
+          transform: translateX(-48px);
+        }
+      }
+
+      .belt-items {
+        position: relative;
+        display: grid;
+        grid-template-columns: repeat(6, 1fr);
+        height: 100%;
+        z-index: 1;
+      }
+
+      .belt-item {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        color: #ffffff;
+        font-size: 0.85rem;
+        gap: 6px;
+      }
+
+      .belt-icon {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.1rem;
+        background: rgba(82, 182, 255, 0.2);
+        border: 1px solid rgba(82, 182, 255, 0.5);
+      }
+
+      .flash-overlay {
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        background: radial-gradient(circle, rgba(255, 255, 255, 0.6), rgba(0, 123, 255, 0));
+        opacity: 0;
+        transition: opacity 0.4s ease-out;
+        mix-blend-mode: screen;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .flash-overlay.active {
+        opacity: 1;
+      }
+
+      .flash-message {
+        font-size: 2.2rem;
+        letter-spacing: 0.1em;
+        color: #ffffff;
+        text-shadow: 0 0 20px rgba(0, 123, 255, 0.9);
+        opacity: 0;
+        transform: scale(0.95);
+        transition: opacity 0.2s ease, transform 0.2s ease;
+      }
+
+      .flash-overlay.active .flash-message {
+        opacity: 1;
+        transform: scale(1);
+      }
+
       .controls {
         display: flex;
         gap: 16px;
@@ -255,6 +355,16 @@
       <div class="pipeline" id="pipeline"></div>
     </div>
 
+    <div class="card belt-card" style="margin-top: 24px">
+      <div class="label">DATA BELT</div>
+      <p class="subline" style="margin:0;color:#9ecbff;font-size:0.85rem">
+        リソースがベルトコンベアーで流れ、スコアに応じて状態が変化
+      </p>
+      <div class="belt-track">
+        <div class="belt-items" id="beltItems"></div>
+      </div>
+    </div>
+
     <div class="card" style="margin-top: 24px">
       <div class="label">LOG FEED</div>
       <div class="logs" id="logs"></div>
@@ -265,6 +375,10 @@
       <div class="logs" id="factStream"></div>
     </div>
 
+    <div class="flash-overlay" id="flashOverlay">
+      <div class="flash-message" id="flashMessage">GOLD OUTPUT!</div>
+    </div>
+
     <script>
       // 日本語コメント: フロントのみでFactoryの雰囲気を再現する
       const preset = ["Gather", "Refine", "Score", "Publish", "Learn"];
@@ -273,6 +387,8 @@
       let tick = 0;
       let failureStreak = 0;
       let autoInterval = null;
+      let flashTicks = 0;
+      let audioCtx = null;
 
       const scoreEl = document.getElementById("score");
       const conditionEl = document.getElementById("condition");
@@ -282,6 +398,9 @@
       const pixelGridEl = document.getElementById("pixelGrid");
       const tweetButton = document.getElementById("tweetFact");
       const factStreamEl = document.getElementById("factStream");
+      const beltItemsEl = document.getElementById("beltItems");
+      const flashOverlay = document.getElementById("flashOverlay");
+      const flashMessage = document.getElementById("flashMessage");
 
       // 日本語コメント: ピクセル進捗を初期化
       const TOTAL_PIXELS = 24;
@@ -362,8 +481,23 @@
         },
       ];
       const factBuffer = [];
+      const beltSlotCount = 6;
+      const beltData = Array.from({ length: beltSlotCount }, () => ({ icon: "🌀", label: "IDLE", flash: false }));
+      const flashMessages = [
+        "GOLD OUTPUT!",
+        "FACTORY SYNC 100%",
+        "ハイバリュー情報出荷",
+        "CONDITION GREEN",
+      ];
 
       function runTick() {
+        // 日本語コメント: フラッシュが継続していればTickごとに残りを減算
+        if (flashTicks > 0) {
+          flashTicks--;
+          if (flashTicks === 0) {
+            flashOverlay.classList.remove("active");
+          }
+        }
         tick++;
         // 日本語コメント: スコアを疑似的に算出
         const tickScore = Math.round(Math.random() * 120);
@@ -372,6 +506,7 @@
         updatePixels(Math.min(100, (score / 1200) * 100));
         renderPipeline(tickScore);
         addLog("TICK " + tick, `Score +${tickScore}`);
+        advanceBelt(tickScore);
         streamFact();
 
         if (tickScore < 40) {
@@ -413,6 +548,56 @@
         sourceListEl.innerHTML = sources
           .map((source, idx) => `<div class="pill">ソース${idx + 1}: ${source}</div>`)
           .join("");
+      }
+
+      function advanceBelt(tickScore) {
+        // 日本語コメント: スコアに応じてベルトアイコンを更新
+        const icon = tickScore < 40 ? "⚠" : tickScore > 90 ? "⭐" : "⚙";
+        const label = tickScore < 40 ? "警戒" : tickScore > 90 ? "黄金ライン" : "処理中";
+        const flash = tickScore > 90;
+        beltData.pop();
+        beltData.unshift({ icon, label, flash });
+        const tail = beltData[beltSlotCount - 1];
+        if (tail.flash) {
+          triggerFlash();
+          tail.flash = false;
+        }
+        renderBelt();
+      }
+
+      function renderBelt() {
+        beltItemsEl.innerHTML = beltData
+          .map(
+            (item) =>
+              `<div class="belt-item"><span class="belt-icon">${item.icon}</span><span>${item.label}</span></div>`
+          )
+          .join("");
+      }
+
+      function triggerFlash() {
+        // 日本語コメント: 優秀データが最終ノードへ到達した瞬間にフラッシュ
+        flashMessage.textContent = flashMessages[Math.floor(Math.random() * flashMessages.length)];
+        flashTicks = 2;
+        flashOverlay.classList.add("active");
+        playChime();
+      }
+
+      function playChime() {
+        // 日本語コメント: Web Audioで鈴の音を合成して通知
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContext) return;
+        if (!audioCtx) audioCtx = new AudioContext();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        const now = audioCtx.currentTime;
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(880, now);
+        gain.gain.setValueAtTime(0.0001, now);
+        gain.gain.exponentialRampToValueAtTime(0.4, now + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.6);
+        osc.connect(gain).connect(audioCtx.destination);
+        osc.start(now);
+        osc.stop(now + 0.6);
       }
 
       function updatePixels(progress) {
@@ -488,6 +673,7 @@
       renderSources();
       renderPipeline(80);
       updatePixels(10);
+      renderBelt();
       addLog("INIT", "Fact Factory　を起動");
     </script>
   </body>
