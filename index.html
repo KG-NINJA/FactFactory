@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Fact Factory　</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <style>
+      :root {
+        --blue-core: #007bff;
+        --blue-light: #52b6ff;
+        --purple: #8f7bff;
+        --bg-dark: #050814;
+        --grid-size: 12;
+      }
+
+      * {
+        box-sizing: border-box;
+        font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: radial-gradient(circle at top, #071838 0%, #02040a 55%, #000 100%);
+        color: #e8f1ff;
+        padding: 24px;
+      }
+
+      h1 {
+        font-size: 2.4rem;
+        text-transform: uppercase;
+        letter-spacing: 0.2rem;
+        text-align: center;
+        margin-bottom: 8px;
+      }
+
+      .subline {
+        text-align: center;
+        color: #79a8ff;
+        margin-bottom: 32px;
+      }
+
+      .dashboard {
+        display: grid;
+        gap: 20px;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      }
+
+      .card {
+        background: rgba(9, 16, 46, 0.85);
+        border: 1px solid rgba(82, 182, 255, 0.3);
+        box-shadow: 0 0 15px rgba(0, 123, 255, 0.3);
+        border-radius: 16px;
+        padding: 20px;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .card::after {
+        content: "";
+        position: absolute;
+        inset: -120% auto auto -120%;
+        width: 240%;
+        height: 240%;
+        background: radial-gradient(circle, rgba(0, 123, 255, 0.15), transparent 60%);
+        animation: pulse 8s linear infinite;
+        pointer-events: none;
+      }
+
+      @keyframes pulse {
+        0% {
+          transform: rotate(0deg);
+        }
+        100% {
+          transform: rotate(360deg);
+        }
+      }
+
+      .score {
+        font-size: 3rem;
+        font-weight: 700;
+      }
+
+      .label {
+        font-size: 0.9rem;
+        letter-spacing: 0.15rem;
+        color: #7cd4ff;
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 14px;
+        border-radius: 999px;
+        background: rgba(82, 182, 255, 0.1);
+        border: 1px solid rgba(82, 182, 255, 0.4);
+        font-size: 0.85rem;
+      }
+
+      .pipeline {
+        display: flex;
+        gap: 16px;
+        overflow-x: auto;
+        padding-bottom: 8px;
+      }
+
+      .node {
+        min-width: 160px;
+        background: rgba(5, 17, 48, 0.7);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        border-radius: 12px;
+        padding: 16px;
+        position: relative;
+      }
+
+      .node::before {
+        content: "";
+        position: absolute;
+        left: -8px;
+        top: 50%;
+        width: 8px;
+        height: 2px;
+        background: linear-gradient(90deg, rgba(0, 123, 255, 0), rgba(0, 123, 255, 0.8));
+      }
+
+      .node:first-child::before {
+        display: none;
+      }
+
+      .node-title {
+        font-weight: 600;
+        margin-bottom: 6px;
+      }
+
+      .status-dot {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        margin-right: 6px;
+      }
+
+      .status-row {
+        display: flex;
+        align-items: center;
+        margin-top: 6px;
+        font-size: 0.85rem;
+      }
+
+      .logs {
+        max-height: 240px;
+        overflow-y: auto;
+        font-family: "JetBrains Mono", "SFMono-Regular", monospace;
+        background: rgba(2, 8, 31, 0.65);
+        border-radius: 12px;
+        padding: 14px;
+        border: 1px solid rgba(82, 182, 255, 0.2);
+      }
+
+      .log-line {
+        margin-bottom: 6px;
+        color: #b8d4ff;
+      }
+
+      .controls {
+        display: flex;
+        gap: 16px;
+        flex-wrap: wrap;
+      }
+
+      button {
+        background: linear-gradient(120deg, var(--blue-core), var(--purple));
+        border: none;
+        border-radius: 999px;
+        color: white;
+        padding: 14px 28px;
+        font-size: 1rem;
+        cursor: pointer;
+        box-shadow: 0 10px 25px rgba(0, 123, 255, 0.35);
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+      }
+
+      button:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 14px 30px rgba(0, 123, 255, 0.45);
+      }
+
+      .pixel-grid {
+        display: grid;
+        grid-template-columns: repeat(var(--grid-size), 1fr);
+        gap: 4px;
+        margin-top: 12px;
+      }
+
+      .pixel {
+        width: 14px;
+        height: 14px;
+        background: rgba(255, 255, 255, 0.08);
+        border-radius: 3px;
+        transition: background 0.3s ease, box-shadow 0.3s ease;
+      }
+
+      .pixel.active {
+        background: var(--blue-light);
+        box-shadow: 0 0 8px var(--blue-light);
+      }
+
+      .pixel.gold {
+        background: #ffd700;
+        box-shadow: 0 0 8px #ffd700;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Fact Factory　</h1>
+    <p class="subline">情報収集ラインを増産して無限スコアを叩き出せ！</p>
+
+    <div class="dashboard">
+      <div class="card">
+        <div class="label">CURRENT SCORE</div>
+        <div class="score" id="score">0000</div>
+        <div class="pill">
+          <span id="condition">STABLE</span>
+        </div>
+        <div class="pixel-grid" id="pixelGrid"></div>
+      </div>
+
+      <div class="card">
+        <div class="label">LIVE CONTROLS</div>
+        <div class="controls">
+          <button id="runTick">Tick Injection</button>
+          <button id="autoMode">Auto Mode</button>
+          <button id="heal">Auto-Heal</button>
+          <button id="tweetFact">Share #FactFactory</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="label">SOURCE PRESET</div>
+        <div id="sourceList"></div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top: 24px">
+      <div class="label">PIPELINE STATUS</div>
+      <div class="pipeline" id="pipeline"></div>
+    </div>
+
+    <div class="card" style="margin-top: 24px">
+      <div class="label">LOG FEED</div>
+      <div class="logs" id="logs"></div>
+    </div>
+
+    <div class="card" style="margin-top: 24px">
+      <div class="label">REAL-TIME FACT STREAM</div>
+      <div class="logs" id="factStream"></div>
+    </div>
+
+    <script>
+      // 日本語コメント: フロントのみでFactoryの雰囲気を再現する
+      const preset = ["Gather", "Refine", "Score", "Publish", "Learn"];
+      const sources = ["政府統計API", "研究プレプリント", "テックSNS"];
+      let score = 0;
+      let tick = 0;
+      let failureStreak = 0;
+      let autoInterval = null;
+
+      const scoreEl = document.getElementById("score");
+      const conditionEl = document.getElementById("condition");
+      const logsEl = document.getElementById("logs");
+      const pipelineEl = document.getElementById("pipeline");
+      const sourceListEl = document.getElementById("sourceList");
+      const pixelGridEl = document.getElementById("pixelGrid");
+      const tweetButton = document.getElementById("tweetFact");
+      const factStreamEl = document.getElementById("factStream");
+
+      // 日本語コメント: ピクセル進捗を初期化
+      const TOTAL_PIXELS = 24;
+      for (let i = 0; i < TOTAL_PIXELS; i++) {
+        const pixel = document.createElement("div");
+        pixel.className = "pixel";
+        pixelGridEl.appendChild(pixel);
+      }
+
+      document.getElementById("runTick").addEventListener("click", () => {
+        runTick();
+      });
+
+      document.getElementById("autoMode").addEventListener("click", () => {
+        if (autoInterval) {
+          clearInterval(autoInterval);
+          autoInterval = null;
+          addLog("AUTO", "自動運転を停止");
+        } else {
+          autoInterval = setInterval(runTick, 2000);
+          addLog("AUTO", "自動運転を開始");
+        }
+      });
+
+      document.getElementById("heal").addEventListener("click", () => {
+        // 日本語コメント: ヒールでソース配列をシャッフル
+        sources.sort(() => Math.random() - 0.5);
+        renderSources();
+        addLog("HEAL", "パイプラインを再配線");
+      });
+
+      tweetButton.addEventListener("click", () => {
+        // 日本語コメント: WHO推奨値という実用情報を#FactFactoryタグ付きで共有
+        const tweetText = "WHOは成人に週150〜300分の中強度有酸素運動を推奨しています。#FactFactory";
+        const tweetUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}`;
+        window.open(tweetUrl, "_blank", "noopener");
+        addLog("SHARE", "WHO推奨運動時間をシェア");
+      });
+
+      const factPool = [
+        { info: "NOAAの海面水温平年差", value: "+0.93℃", source: "NOAA" },
+        { info: "FAO世界食料価格指数", value: "121.8", source: "FAO" },
+        { info: "IEA再エネ投資", value: "+35% YoY", source: "IEA" },
+        { info: "GitHub AIトレンド", value: "AutoRAG", source: "GitHub" },
+        { info: "IMF世界成長率見通し", value: "2025年3.1%", source: "IMF" },
+      ];
+      const factBuffer = [];
+
+      function runTick() {
+        tick++;
+        // 日本語コメント: スコアを疑似的に算出
+        const tickScore = Math.round(Math.random() * 120);
+        score += tickScore;
+        scoreEl.textContent = score.toString().padStart(4, "0");
+        updatePixels(Math.min(100, (score / 1200) * 100));
+        renderPipeline(tickScore);
+        addLog("TICK " + tick, `Score +${tickScore}`);
+        streamFact();
+
+        if (tickScore < 40) {
+          failureStreak++;
+          conditionEl.textContent = "CONDITION RED";
+          conditionEl.style.color = "#ff7373";
+          addLog("ALERT", `Condition Red発生 ${failureStreak}回目`);
+          if (failureStreak === 2) {
+            addLog("SUPER", "Super Mode突入！代替案を生成");
+          }
+          if (failureStreak === 5) {
+            addLog("SAFE", "Game Over回避のためAlternative Angleへ切替");
+            failureStreak = 0;
+          }
+        } else {
+          failureStreak = 0;
+          conditionEl.textContent = "STABLE";
+          conditionEl.style.color = "#7cd4ff";
+        }
+      }
+
+      function renderPipeline(tickScore) {
+        pipelineEl.innerHTML = "";
+        preset.forEach((stage, index) => {
+          const node = document.createElement("div");
+          node.className = "node";
+          node.innerHTML = `
+            <div class="node-title">${stage}</div>
+            <div class="status-row">
+              <span class="status-dot" style="background:${getStageColor(index, tickScore)}"></span>
+              <span>${getStatusText(index, tickScore)}</span>
+            </div>
+          `;
+          pipelineEl.appendChild(node);
+        });
+      }
+
+      function renderSources() {
+        sourceListEl.innerHTML = sources
+          .map((source, idx) => `<div class="pill">ソース${idx + 1}: ${source}</div>`)
+          .join("");
+      }
+
+      function updatePixels(progress) {
+        const activePixels = Math.round((progress / 100) * TOTAL_PIXELS);
+        const pixels = pixelGridEl.querySelectorAll(".pixel");
+        pixels.forEach((pixel, idx) => {
+          pixel.classList.remove("active", "gold");
+          if (idx < activePixels) {
+            pixel.classList.add(progress >= 80 ? "gold" : "active");
+          }
+        });
+      }
+
+      function addLog(tag, text) {
+        const line = document.createElement("div");
+        line.className = "log-line";
+        line.textContent = `[${tag}] ${text}`;
+        logsEl.prepend(line);
+        // 日本語コメント: ログが多すぎる場合は古いものを削除
+        while (logsEl.childElementCount > 30) {
+          logsEl.removeChild(logsEl.lastChild);
+        }
+      }
+
+      function streamFact() {
+        // 日本語コメント: 新規収集ファクトをリアルタイムで可視化
+        const fact = factPool[Math.floor(Math.random() * factPool.length)];
+        factBuffer.unshift({ ...fact, ts: new Date().toLocaleTimeString("ja-JP", { hour12: false }) });
+        while (factBuffer.length > 8) {
+          factBuffer.pop();
+        }
+        renderFactStream();
+      }
+
+      function renderFactStream() {
+        factStreamEl.innerHTML = factBuffer
+          .map(
+            (item) =>
+              `<div class="log-line">[${item.ts}] ${item.info}: <strong>${item.value}</strong> <span style="color:#7cd4ff">#FactFactory</span> / ${item.source}</div>`
+          )
+          .join("");
+      }
+
+      function getStageColor(index, tickScore) {
+        // 日本語コメント: ステージ別の発光カラーを返す
+        if (tickScore < 40 && index >= 2) return "#ff7373";
+        const colors = ["#52b6ff", "#7cf6ff", "#ffd700", "#9ef887", "#52b6ff"];
+        return colors[index % colors.length];
+      }
+
+      function getStatusText(index, tickScore) {
+        const texts = [
+          "収集強度: " + (60 + index * 5) + "%",
+          "ノイズ除去: Poisson Gate",
+          `評価: ${tickScore.toFixed(0)}pt`,
+          "出荷ライン稼働中",
+          "学習ウェイト調整",
+        ];
+        return texts[index];
+      }
+
+      renderSources();
+      renderPipeline(80);
+      updatePixels(10);
+      addLog("INIT", "Fact Factory　を起動");
+    </script>
+  </body>
+</html>
