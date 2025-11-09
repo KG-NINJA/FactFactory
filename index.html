@@ -162,6 +162,15 @@
         color: #b8d4ff;
       }
 
+      .fact-line {
+        cursor: pointer;
+      }
+
+      .fact-line:hover {
+        color: #ffffff;
+        text-decoration: underline;
+      }
+
       .controls {
         display: flex;
         gap: 16px;
@@ -305,19 +314,52 @@
       });
 
       tweetButton.addEventListener("click", () => {
-        // 日本語コメント: WHO推奨値という実用情報を#FactFactoryタグ付きで共有
-        const tweetText = "WHOは成人に週150〜300分の中強度有酸素運動を推奨しています。#FactFactory";
+        // 日本語コメント: 収集済みの中でスコア最大のファクトとゲームURLを共有
+        const topFact = (factBuffer.length ? factBuffer : factPool).reduce((max, fact) =>
+          fact.score > max.score ? fact : max
+        );
+        const tweetText = `${topFact.info} ${topFact.value} / ${topFact.source} https://kg-ninja.github.io/FactFactory/ #FactFactory`;
         const tweetUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}`;
         window.open(tweetUrl, "_blank", "noopener");
-        addLog("SHARE", "WHO推奨運動時間をシェア");
+        addLog("SHARE", `最高スコア記事(${topFact.source})をシェア`);
       });
 
       const factPool = [
-        { info: "NOAAの海面水温平年差", value: "+0.93℃", source: "NOAA" },
-        { info: "FAO世界食料価格指数", value: "121.8", source: "FAO" },
-        { info: "IEA再エネ投資", value: "+35% YoY", source: "IEA" },
-        { info: "GitHub AIトレンド", value: "AutoRAG", source: "GitHub" },
-        { info: "IMF世界成長率見通し", value: "2025年3.1%", source: "IMF" },
+        {
+          info: "NOAAの海面水温平年差",
+          value: "+0.93℃",
+          source: "NOAA",
+          url: "https://www.noaa.gov/",
+          score: 88,
+        },
+        {
+          info: "FAO世界食料価格指数",
+          value: "121.8",
+          source: "FAO",
+          url: "https://www.fao.org/worldfoodsituation/foodpricesindex",
+          score: 76,
+        },
+        {
+          info: "IEA再エネ投資",
+          value: "+35% YoY",
+          source: "IEA",
+          url: "https://www.iea.org/reports/world-energy-investment-2024",
+          score: 91,
+        },
+        {
+          info: "GitHub AIトレンド",
+          value: "AutoRAG",
+          source: "GitHub",
+          url: "https://github.com/trending",
+          score: 70,
+        },
+        {
+          info: "IMF世界成長率見通し",
+          value: "2025年3.1%",
+          source: "IMF",
+          url: "https://www.imf.org/en/Publications/WEO",
+          score: 84,
+        },
       ];
       const factBuffer = [];
 
@@ -409,10 +451,21 @@
         factStreamEl.innerHTML = factBuffer
           .map(
             (item) =>
-              `<div class="log-line">[${item.ts}] ${item.info}: <strong>${item.value}</strong> <span style="color:#7cd4ff">#FactFactory</span> / ${item.source}</div>`
+              `<div class="log-line fact-line" data-url="${item.url}">[${item.ts}] ${item.info}: <strong>${item.value}</strong> <span style="color:#7cd4ff">#FactFactory</span> / ${item.source}</div>`
           )
           .join("");
       }
+
+      factStreamEl.addEventListener("click", (event) => {
+        // 日本語コメント: ファクトをクリックして元ソースを即時参照
+        let target = event.target;
+        if (target.nodeType !== 1) target = target.parentElement;
+        if (!target) return;
+        const factLine = target.closest ? target.closest(".fact-line") : null;
+        if (!factLine) return;
+        const url = factLine.getAttribute("data-url");
+        if (url) window.open(url, "_blank", "noopener");
+      });
 
       function getStageColor(index, tickScore) {
         // 日本語コメント: ステージ別の発光カラーを返す
